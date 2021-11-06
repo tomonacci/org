@@ -9447,13 +9447,16 @@ When called through ELisp, arg is also interpreted in the following way:
     (when (< (prefix-numeric-value arg) -1) (user-error "Prefix argument %d not supported" arg))
     (let ((org-blocker-hook org-blocker-hook)
 	  commentp
-	  case-fold-search)
+	  case-fold-search
+	  (effective-time (org-current-effective-time)))
       (when (equal arg '(64))
 	(setq arg nil org-blocker-hook nil))
       (when (and org-blocker-hook
 		 (or org-inhibit-blocking
 		     (org-entry-get nil "NOBLOCKING")))
 	(setq org-blocker-hook nil))
+      (when (equal arg '(256))
+	(setq arg nil effective-time (org-read-date t t)))
       (save-excursion
 	(catch 'exit
 	  (org-back-to-heading t)
@@ -9612,12 +9615,12 @@ When called through ELisp, arg is also interpreted in the following way:
 		(org-add-planning-info nil nil 'closed))
 	      (when (and now-done-p org-log-done)
 		;; It is now done, and it was not done before.
-		(org-add-planning-info 'closed (org-current-effective-time))
+		(org-add-planning-info 'closed effective-time)
 		(when (and (not dolog) (eq 'note org-log-done))
-		  (org-add-log-setup 'done org-state this 'note)))
+		  (org-add-log-setup 'done org-state this 'note nil effective-time)))
 	      (when (and org-state dolog)
 		;; This is a non-nil state, and we need to log it.
-		(org-add-log-setup 'state org-state this dolog)))
+		(org-add-log-setup 'state org-state this dolog nil effective-time)))
 	    ;; Fixup tag positioning.
 	    (org-todo-trigger-tag-changes org-state)
 	    (when org-auto-align-tags (org-align-tags))
@@ -9637,7 +9640,7 @@ When called through ELisp, arg is also interpreted in the following way:
 		(save-match-data
 		  (setq org-agenda-headline-snapshot-before-repeat
 			(org-get-heading))))
-	      (org-auto-repeat-maybe org-state))
+	      (org-auto-repeat-maybe org-state effective-time))
 	    ;; Fixup cursor location if close to the keyword.
 	    (when (and (outline-on-heading-p)
 		       (not (bolp))
@@ -10205,7 +10208,7 @@ repeater from there instead."
 (defvar org-log-note-how nil)
 (defvar org-log-note-extra)
 (defvar org-log-setup nil)
-(defun org-auto-repeat-maybe (done-word)
+(defun org-auto-repeat-maybe (done-word &optional effective-time)
   "Check if the current headline contains a repeated timestamp.
 
 If yes, set TODO state back to what it was and change the base date
@@ -10244,7 +10247,7 @@ This function is run automatically after each state change to a DONE state."
 		      (when (org-at-clock-log-p) (throw :clock t))))))
 	(org-entry-put nil "LAST_REPEAT" (format-time-string
 					  (org-time-stamp-format t t)
-                                          (org-current-effective-time))))
+                                          (or effective-time (org-current-effective-time)))))
       (when org-log-repeat
 	(if org-log-setup
 	    ;; We are already setup for some record.
@@ -10255,7 +10258,9 @@ This function is run automatically after each state change to a DONE state."
 	  (org-add-log-setup 'state
 			     (or done-word (car org-done-keywords))
 			     org-last-state
-			     org-log-repeat)))
+			     org-log-repeat
+			     nil
+			     effective-time)))
       ;; Timestamps without a repeater are usually skipped.  However,
       ;; a SCHEDULED timestamp without one is removed, as they are no
       ;; longer relevant.
@@ -10295,9 +10300,9 @@ This function is run automatically after each state change to a DONE state."
 		      ;; repeater is by hours.
 		      (if (equal what "h")
 			  (org-timestamp-change
-			   (floor (- (org-timestamp-to-now ts t)) 60) 'minute)
+			   (floor (- (org-timestamp-to-now ts t effective-time)) 60) 'minute)
 			(org-timestamp-change
-			 (- (org-today) (time-to-days time)) 'day)))
+			 (- (time-to-days effective-time) (time-to-days time)) 'day)))
 		     ((equal "+" repeater-type)
 		      (let ((nshiftmax 10)
 			    (nshift 0))
@@ -10760,7 +10765,7 @@ narrowing."
          (when (< (point) endpos) (goto-char endpos))))))
    (if (bolp) (point) (line-beginning-position 2))))
 
-(defun org-add-log-setup (&optional purpose state prev-state how extra)
+(defun org-add-log-setup (&optional purpose state prev-state how extra effective-time)
   "Set up the post command hook to take a note.
 If this is about to TODO state change, the new state is expected in STATE.
 HOW is an indicator what kind of note should be created.
@@ -10771,7 +10776,7 @@ EXTRA is additional text that will be inserted into the notes buffer."
 	org-log-note-previous-state prev-state
 	org-log-note-how how
 	org-log-note-extra extra
-	org-log-note-effective-time (org-current-effective-time)
+	org-log-note-effective-time (or effective-time (org-current-effective-time))
         org-log-note-this-command this-command
         org-log-note-recursion-depth (recursion-depth)
         org-log-setup t)
@@ -14649,12 +14654,12 @@ Don't touch the rest."
     (mapcar (lambda (x) (if (< (setq n (1+ n)) 7) (or x 0) x)) time)))
 
 (defalias 'org-time-stamp-to-now #'org-timestamp-to-now)
-(defun org-timestamp-to-now (timestamp-string &optional seconds)
+(defun org-timestamp-to-now (timestamp-string &optional seconds now)
   "Difference between TIMESTAMP-STRING and now in days.
 If SECONDS is non-nil, return the difference in seconds."
   (let ((fdiff (if seconds #'float-time #'time-to-days)))
     (- (funcall fdiff (org-time-string-to-time timestamp-string))
-       (funcall fdiff nil))))
+       (funcall fdiff now))))
 
 (defun org-deadline-close-p (timestamp-string &optional ndays)
   "Is the time in TIMESTAMP-STRING close to the current date?"
