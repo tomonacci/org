@@ -965,6 +965,11 @@ eliminates the schedule delay when the date is posterior to the deadline."
 	  (const :tag "Ignore delay if entry has a deadline" t)
 	  (integer :tag "Honor delay up until N days after the scheduled date")))
 
+(defcustom org-agenda-skip-timestamp-in-body nil
+  "When non-nil, timestamps in entry bodies are ignored."
+  :group 'org-agenda-skip
+  :type 'boolean)
+
 (defcustom org-agenda-skip-additional-timestamps-same-entry nil
   "When nil, multiple same-day timestamps in entry make multiple agenda lines.
 When non-nil, after the search for timestamps has matched once in an
@@ -5899,6 +5904,10 @@ displayed in agenda view."
 		(throw :skip nil))))
 	  (save-excursion
 	    (re-search-backward org-outline-regexp-bol nil t)
+            (when (and org-agenda-skip-timestamp-in-body
+                       (save-excursion
+                         (< (re-search-forward "$") pos)))
+              (throw :skip nil))
 	    ;; Possibly skip timestamp when a deadline is set.
 	    (when (and org-agenda-skip-timestamp-if-deadline-is-shown
 		       (assq (point) deadline-position-alist))
