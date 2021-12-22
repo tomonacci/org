@@ -187,15 +187,14 @@ source code blocks by languages matching a regular expression.
 
 Return a list whose CAR is the tangled file name."
   (interactive "fFile to tangle: \nP")
-  (let ((visited-p (find-buffer-visiting (expand-file-name file)))
-	to-be-removed)
+  (let* ((visited (find-buffer-visiting file))
+         (buffer (or visited (find-file-noselect file))))
     (prog1
-	(save-window-excursion
-	  (find-file file)
-	  (setq to-be-removed (current-buffer))
-	  (mapcar #'expand-file-name (org-babel-tangle nil target-file lang-re)))
-      (unless visited-p
-	(kill-buffer to-be-removed)))))
+        (with-current-buffer buffer
+          (org-with-wide-buffer
+           (mapcar #'expand-file-name
+                   (org-babel-tangle nil target-file lang-re))))
+      (unless visited (kill-buffer buffer)))))
 
 (defun org-babel-tangle-publish (_ filename pub-dir)
   "Tangle FILENAME and place the results in PUB-DIR."
@@ -329,10 +328,10 @@ Did you give the decimal value %1$d by mistake?" mode)))
    ((string-match-p "^[ugoa]*\\(?:[+-=][rwxXstugo]*\\)+\\(,[ugoa]*\\(?:[+-=][rwxXstugo]*\\)+\\)*$" mode)
     ;; Match regexp taken from `file-modes-symbolic-to-number'.
     (file-modes-symbolic-to-number mode org-babel-tangle-default-file-mode))
-   ((string-match-p "^\\(?:[r-][w-][x-]\\)\\{3\\}$" mode)
+   ((string-match-p "^[r-][w-][xs-][r-][w-][xs-][r-][w-][x-]$" mode)
     (file-modes-symbolic-to-number (concat  "u=" (substring mode 0 3)
                                             ",g=" (substring mode 3 6)
-                                            ",a=" (substring mode 6 9))
+                                            ",o=" (substring mode 6 9))
                                    0))
    (t (error "File mode %S not recognised as a valid format. See `org-babel-interpret-file-mode'." mode))))
 

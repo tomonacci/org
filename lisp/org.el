@@ -95,7 +95,6 @@
 (require 'org-keys)
 (require 'ol)
 (require 'oc)
-(require 'oc-basic)
 (require 'org-table)
 
 ;; `org-outline-regexp' ought to be a defconst but is let-bound in
@@ -699,7 +698,7 @@ defined in org-duration.el.")
 If a description starts with <C>, the file is not part of Emacs and Org mode,
 so loading it will require that you have properly installed org-contrib
 package from NonGNU Emacs Lisp Package Archive
-http://elpa.nongnu.org/nongnu/org-contrib.html
+https://elpa.nongnu.org/nongnu/org-contrib.html
 
 You can also use this system to load external packages (i.e. neither Org
 core modules, nor org-contrib modules).  Just add symbols
@@ -779,7 +778,7 @@ For export specific modules, see also `org-export-backends'."
 If a description starts with <C>, the file is not part of Emacs and Org mode,
 so loading it will require that you have properly installed org-contrib
 package from NonGNU Emacs Lisp Package Archive
-http://elpa.nongnu.org/nongnu/org-contrib.html
+https://elpa.nongnu.org/nongnu/org-contrib.html
 
 Unlike to `org-modules', libraries in this list will not be
 loaded along with Org, but only once the export framework is
@@ -5785,8 +5784,13 @@ needs to be inserted at a specific position in the font-lock sequence.")
 		'(9 'org-special-keyword t))
 	  ;; Blocks and meta lines
 	  '(org-fontify-meta-lines-and-blocks)
-          ;; Citations
-          '(org-cite-activate))))
+          '(org-fontify-inline-src-blocks)
+          ;; Citations.  When an activate processor is specified, if
+          ;; specified, try loading it beforehand.
+          (progn
+            (unless (null org-cite-activate-processor)
+              (org-cite-try-load-processor org-cite-activate-processor))
+            '(org-cite-activate)))))
     (setq org-font-lock-extra-keywords (delq nil org-font-lock-extra-keywords))
     (run-hooks 'org-font-lock-set-keywords-hook)
     ;; Now set the full font-lock-keywords
@@ -6920,7 +6924,7 @@ frame is not changed."
       (setq beg (point)
 	    heading (org-get-heading 'no-tags))
       (org-end-of-subtree t t)
-      (when (org-at-heading-p) (backward-char 1))
+      (when (and (not (eobp)) (org-at-heading-p)) (backward-char 1))
       (setq end (point)))
     (when (and (buffer-live-p org-last-indirect-buffer)
 	       (not (eq org-indirect-buffer-display 'new-frame))
@@ -11372,13 +11376,14 @@ or a character."
 	    (setq
 	     new
 	     (if nump
-                 (let ((msg (format "Priority %s-%s, SPC to remove: "
-				    (number-to-string org-priority-highest)
-				    (number-to-string org-priority-lowest))))
-                   (if (< 9 org-priority-lowest)
-		       (string-to-number (read-string msg))
-                     (message msg)
-                     (string-to-number (char-to-string (read-char-exclusive)))))
+                 (let* ((msg (format "Priority %s-%s, SPC to remove: "
+                                     (number-to-string org-priority-highest)
+                                     (number-to-string org-priority-lowest)))
+                        (s (if (< 9 org-priority-lowest)
+                               (read-string msg)
+                             (message msg)
+                             (char-to-string (read-char-exclusive)))))
+                   (if (equal s " ") ?\s (string-to-number s)))
 	       (progn (message "Priority %c-%c, SPC to remove: "
 			       org-priority-highest org-priority-lowest)
 		      (save-match-data
@@ -12635,43 +12640,52 @@ Inherited tags have the `inherited' text property."
              (not local))
         org-scanner-tags
       (org-with-point-at (unless (org-element-type pos-or-element)
-                           (or pos-or-element (point)))
-        (unless (and (not (org-element-type pos-or-element))
-                     (org-before-first-heading-p))
-          (unless (org-element-type pos-or-element) (org-back-to-heading t))
-          (let ((ltags (if (org-element-type pos-or-element)
-                           (org-element-property :tags (org-element-lineage pos-or-element '(headline) t))
-                         (org--get-local-tags)))
-                itags)
-            (if (or local (not org-use-tag-inheritance)) ltags
-              (let ((cached (and (org-element--cache-active-p)
-                                 (if (org-element-type pos-or-element)
-                                     (org-element-lineage pos-or-element '(headline) t)
-                                   (org-element-at-point nil 'cached)))))
-                (if cached
-                    (while (setq cached (org-element-property :parent cached))
-                      (setq itags (nconc (mapcar #'org-add-prop-inherited
-                                                 ;; If we do not wrap result into `cl-copy-list', reference would
-                                                 ;; be returned and cache element might be modified directly.
-                                                 (cl-copy-list (org-element-property :tags cached)))
-                                         itags)))
-                  (while (org-up-heading-safe)
+                        (or pos-or-element (point)))
+        (unless (or (org-element-type pos-or-element)
+                    (org-before-first-heading-p))
+          (org-back-to-heading t))
+        (let ((ltags (if (org-element-type pos-or-element)
+                         (org-element-property :tags (org-element-lineage pos-or-element '(headline inlinetask) t))
+                       (org--get-local-tags)))
+              itags)
+          (if (or local (not org-use-tag-inheritance)) ltags
+            (let ((cached (and (org-element--cache-active-p)
+                               (if (org-element-type pos-or-element)
+                                   (org-element-lineage pos-or-element '(headline org-data inlinetask) t)
+                                 (org-element-at-point nil 'cached)))))
+              (if cached
+                  (while (setq cached (org-element-property :parent cached))
                     (setq itags (nconc (mapcar #'org-add-prop-inherited
-					       (org--get-local-tags))
-				       itags)))))
-              (setq itags (append org-file-tags itags))
-              (nreverse
-	       (delete-dups
-	        (nreverse (nconc (org-remove-uninherited-tags itags) ltags)))))))))))
+                                               ;; If we do not wrap result into `cl-copy-list', reference would
+                                               ;; be returned and cache element might be modified directly.
+                                               (cl-copy-list (org-element-property :tags cached)))
+                                       itags)))
+                (while (org-up-heading-safe)
+                  (setq itags (nconc (mapcar #'org-add-prop-inherited
+					     (org--get-local-tags))
+				     itags)))))
+            (setq itags (append org-file-tags itags))
+            (nreverse
+	     (delete-dups
+	      (nreverse (nconc (org-remove-uninherited-tags itags) ltags))))))))))
 
 (defun org-get-buffer-tags ()
   "Get a table of all tags used in the buffer, for completion."
-  (org-with-point-at 1
-    (let (tags)
-      (while (re-search-forward org-tag-line-re nil t)
-	(setq tags (nconc (split-string (match-string-no-properties 2) ":")
-			  tags)))
-      (mapcar #'list (delete-dups (append org-file-tags tags))))))
+  (if (org-element--cache-active-p)
+      ;; `org-element-cache-map' is about 2x faster compared to regexp
+      ;; search.
+      (let ((tags (org-element-cache-map
+                   (lambda (el) (org-element-property :tags el)))))
+        (mapcar #'list (mapcar #'substring-no-properties
+                               (delete-dups
+                                (append org-file-tags
+                                        (apply #'append tags))))))
+    (org-with-point-at 1
+      (let (tags)
+        (while (re-search-forward org-tag-line-re nil t)
+	  (setq tags (nconc (split-string (match-string-no-properties 2) ":")
+			    tags)))
+        (mapcar #'list (delete-dups (append org-file-tags tags)))))))
 
 ;;;; The mapping API
 
@@ -12957,9 +12971,10 @@ variables is set."
     ;; Maybe update the effort value:
     (unless (equal current value)
       (org-entry-put nil org-effort-property value))
-    (org-refresh-property '((effort . identity)
-			    (effort-minutes . org-duration-to-minutes))
-			  value)
+    (unless (org-element--cache-active-p)
+      (org-refresh-property '((effort . identity)
+			   (effort-minutes . org-duration-to-minutes))
+		         value))
     (when (equal (org-get-heading t t t t)
 		 (bound-and-true-p org-clock-current-task))
       (setq org-clock-effort value)
@@ -13907,10 +13922,11 @@ completion."
     (beginning-of-line 1)
     (skip-chars-forward " \t")
     (when (equal prop org-effort-property)
-      (org-refresh-property
-       '((effort . identity)
-	 (effort-minutes . org-duration-to-minutes))
-       nval)
+      (unless (org-element--cache-active-p)
+        (org-refresh-property
+         '((effort . identity)
+	   (effort-minutes . org-duration-to-minutes))
+         nval))
       (when (string= org-clock-current-task heading)
 	(setq org-clock-effort nval)
 	(org-clock-update-mode-line)))
@@ -15899,7 +15915,7 @@ When a buffer is unmodified, it is just killed.  When modified, it is saved
 	    (or (memq 'stats org-agenda-ignore-properties)
 		(org-refresh-stats-properties))
 	    (or (memq 'effort org-agenda-ignore-properties)
-                (unless (org-element--cache-active-p)
+                (unless org-element-use-cache
 		  (org-refresh-effort-properties)))
 	    (or (memq 'appt org-agenda-ignore-properties)
 		(org-refresh-properties "APPT_WARNTIME" 'org-appt-warntime))
@@ -16867,14 +16883,18 @@ buffer boundaries with possible narrowing."
                                (org-element-property :begin par)
                              (re-search-forward attr-re par-end t)))
               (match-string 1)))
-           (attr-width-val
+           (width
             (cond
-             ((null attr-width) nil)
+             ;; Treat :width t as if `org-image-actual-width' were t.
+             ((string= attr-width "t") nil)
+             ;; Fallback to `org-image-actual-width' if no interprable width is given.
+             ((or (null attr-width)
+                  (string-match-p "\\`[^0-9]" attr-width))
+              (car org-image-actual-width))
+             ;; Convert numeric widths to numbers, converting percentages.
              ((string-match-p "\\`[0-9.]+%" attr-width)
               (/ (string-to-number attr-width) 100.0))
-             (t (string-to-number attr-width))))
-           ;; Fallback to `org-image-actual-width' if no explicit width is given.
-           (width (or attr-width-val (car org-image-actual-width))))
+             (t (string-to-number attr-width)))))
       (if (and (floatp width) (<= 0.0 width 2.0))
           ;; A float in [0,2] should be interpereted as this portion of
           ;; the text width in the window.  This works well with cases like
@@ -20741,7 +20761,7 @@ Optional argument ELEMENT contains element at point."
     (let ((el (or element (org-element-at-point nil 'cached))))
       (if el
           (catch :found
-            (setq el (org-element-lineage el '(headline) 'include-self))
+            (setq el (org-element-lineage el '(headline inlinetask) 'include-self))
             (if no-inheritance
                 (org-element-property :commentedp el)
               (while el

@@ -6788,6 +6788,19 @@ Paragraph<point>"
   (should
    (equal '("foo" "bar")
 	  (org-test-with-temp-text "* Test :foo:bar:" (org-get-tags))))
+  ;; Tags for inlinetasks.
+  (should
+   (equal '("foo" "bar")
+          (progn
+            (require 'org-inlinetask)
+            (org-test-with-temp-text (concat (make-string org-inlinetask-min-level ?*) " Test :foo:bar:")
+              (org-get-tags (org-element-at-point))))))
+  (should
+   (equal '("foo" "bar")
+          (progn
+            (require 'org-inlinetask)
+            (org-test-with-temp-text (concat (make-string org-inlinetask-min-level ?*) " Test :foo:bar:")
+              (org-get-tags nil)))))
   ;; Return nil when there is no tag.
   (should-not
    (org-test-with-temp-text "* Test" (org-get-tags)))
@@ -7433,7 +7446,7 @@ CLOCK: [2012-03-29 Thu 10:00]--[2012-03-29 Thu 16:40] =>  6:40"
   (should
    (string-match-p
     (rx "* TODO Read book
-SCHEDULED: <2021-06-16 Wed +1d>
+SCHEDULED: <2021-06-16 " (1+ (not space)) " +1d>
 :PROPERTIES:
 :LAST_REPEAT:" (1+ nonl) "
 :END:

@@ -75,7 +75,6 @@
 (require 'cl-lib)
 (require 'ob-exp)
 (require 'oc)
-(require 'oc-basic)    ;default value for `org-cite-export-processors'
 (require 'ol)
 (require 'org-element)
 (require 'org-macro)
@@ -1050,6 +1049,7 @@ BACKEND is a structure with `org-export-backend' type."
   (unless (org-export-backend-p backend)
     (error "Unknown \"%s\" back-end: Aborting export" backend)))
 
+;;;###autoload
 (defun org-export-derived-backend-p (backend &rest backends)
   "Non-nil if BACKEND is derived from one of BACKENDS.
 BACKEND is an export back-end, as returned by, e.g.,
@@ -1860,6 +1860,7 @@ INFO is a plist containing export directives."
       (let ((transcoder (cdr (assq type (plist-get info :translate-alist)))))
 	(and (functionp transcoder) transcoder)))))
 
+;;;###autoload
 (defun org-export-data (data info)
   "Convert DATA into current back-end format.
 
@@ -4591,6 +4592,7 @@ objects of the same type."
 ;; `org-export-raw-string' builds a pseudo-object out of a string
 ;; that any export back-end returns as-is.
 
+;;;###autoload
 (defun org-export-raw-string (s)
   "Return a raw object containing string S.
 A raw string is exported as-is, with no additional processing
@@ -6375,7 +6377,11 @@ use it to set a major mode there, e.g,
     (&optional async subtreep visible-only body-only ext-plist)
     (interactive)
     (org-export-to-buffer \\='latex \"*Org LATEX Export*\"
-      async subtreep visible-only body-only ext-plist (lambda () (LaTeX-mode))))
+      async subtreep visible-only body-only ext-plist
+      #'LaTeX-mode))
+
+When expressed as an anonymous function, using `lambda',
+POST-PROCESS needs to be quoted.
 
 This function returns BUFFER."
   (declare (indent 2))
@@ -6438,7 +6444,10 @@ to send the output file through additional processing, e.g,
     (let ((outfile (org-export-output-file-name \".tex\" subtreep)))
       (org-export-to-file \\='latex outfile
         async subtreep visible-only body-only ext-plist
-        (lambda (file) (org-latex-compile file)))
+        #'org-latex-compile)))
+
+When expressed as an anonymous function, using `lambda',
+POST-PROCESS needs to be quoted.
 
 The function returns either a file name returned by POST-PROCESS,
 or FILE."
