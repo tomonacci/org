@@ -1,6 +1,6 @@
 ;;; ol.el --- Org links library                      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -47,7 +47,7 @@
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-do-occur "org" (regexp &optional cleanup))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-cache-refresh "org-element" (pos))
 (declare-function org-element-context "org-element" (&optional element))
 (declare-function org-element-lineage "org-element" (datum &optional types with-self))
@@ -1322,7 +1322,7 @@ PATH is the sexp to evaluate, as a string."
 	       (string-match-p org-link-elisp-skip-confirm-regexp path))
 	  (not org-link-elisp-confirm-function)
 	  (funcall org-link-elisp-confirm-function
-		   (format "Execute %S as Elisp? "
+		   (format "Execute %s as Elisp? "
 			   (org-add-props path nil 'face 'org-warning))))
       (message "%s => %s" path
 	       (if (eq ?\( (string-to-char path))
@@ -1377,7 +1377,7 @@ PATH is the command to execute, as a string."
 	       (string-match-p org-link-shell-skip-confirm-regexp path))
 	  (not org-link-shell-confirm-function)
 	  (funcall org-link-shell-confirm-function
-		   (format "Execute %S in shell? "
+		   (format "Execute %s in shell? "
 			   (org-add-props path nil 'face 'org-warning))))
       (let ((buf (generate-new-buffer "*Org Shell Output*")))
 	(message "Executing %s" path)
@@ -2020,7 +2020,8 @@ Also refresh fontification if needed."
 				    (list old-regexp org-target-link-regexp)
 				    "\\|")
 				   after-re)))))
-	(when (featurep 'org-element)
+	(when (and (featurep 'org-element)
+                   (not (bound-and-true-p org-mode-loading)))
 	  (org-with-point-at 1
 	    (while (re-search-forward regexp nil t)
 	      (org-element-cache-refresh (match-beginning 1))))))

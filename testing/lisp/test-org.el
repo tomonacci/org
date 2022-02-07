@@ -2405,7 +2405,29 @@ SCHEDULED: <2014-03-04 tue.>"
    (equal '(22)
 	  (org-test-with-temp-text "* H1 :yes:\n* H2 :no:\n* H3 :yes:no:"
 	    (let (org-odd-levels-only)
-	      (org-map-entries #'point "yes&no"))))))
+	      (org-map-entries #'point "yes&no")))))
+  ;; Setting `org-map-continue-from'
+  (should
+   (string= ""
+            (org-test-with-temp-text "* H1\n* H2\n* H3n* H4"
+              (org-map-entries
+               (lambda ()
+                 (org-cut-subtree)
+                 (setq org-map-continue-from (point))))
+              (buffer-string))))
+  (should
+   (string= "* H1\n* H2\n* H3\n"
+            (org-test-with-temp-text "* H1\n* H2\n* H3\n* H4"
+              (org-map-entries
+               (lambda ()
+                 (when (string= "H4"
+                                (org-element-property
+                                 :raw-value (org-element-at-point)))
+                   (org-cut-subtree)
+                   (setq org-map-continue-from
+                         (org-element-property
+                          :begin (org-element-at-point))))))
+              (buffer-string)))))
 
 (ert-deftest test-org/edit-headline ()
   "Test `org-edit-headline' specifications."
@@ -5847,6 +5869,10 @@ Paragraph<point>"
    (org-test-with-temp-text "* H\n:PROPERTIES:\n:A: 1\n:END:\n** H2"
      (let ((org-use-property-inheritance nil))
        (org-entry-get (point-max) "A" 'selective))))
+  (should-not
+   (org-test-with-temp-text "* H\n:PROPERTIES:\n:A: 1\n:END:\n* H2"
+     (let ((org-use-property-inheritance t))
+       (org-entry-get (point-max) "A" t))))
   (should
    (equal
     "1 2"

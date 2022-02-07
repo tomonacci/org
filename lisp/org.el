@@ -1,7 +1,7 @@
 ;;; org.el --- Outline-based notes management and organizer -*- lexical-binding: t; -*-
 
 ;; Carstens outline-mode for keeping track of everything.
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Maintainer: Bastien Guerry <bzg@gnu.org>
@@ -191,7 +191,7 @@ Stars are put in group 1 and the trimmed body in group 2.")
 (declare-function org-latex-make-preamble "ox-latex" (info &optional template snippet?))
 (declare-function org-num-mode "org-num" (&optional arg))
 (declare-function org-plot/gnuplot "org-plot" (&optional params))
-(declare-function org-persist-read "org-persist" (var &optional buffer))
+(declare-function org-persist-load "org-persist" (container &optional associated hash-must-match))
 (declare-function org-tags-view "org-agenda" (&optional todo-only match))
 (declare-function org-timer "org-timer" (&optional restart no-insert))
 (declare-function org-timer-item "org-timer" (&optional arg))
@@ -204,6 +204,7 @@ Stars are put in group 1 and the trimmed body in group 2.")
 
 (defvar org-agenda-buffer-name)
 (defvar org-element-paragraph-separate)
+(defvar org-element-cache-map-continue-from)
 (defvar org-indent-indentation-per-level)
 (defvar org-radio-target-regexp)
 (defvar org-target-link-regexp)
@@ -4820,6 +4821,8 @@ This is for getting out of special buffers like capture.")
 
 (defvar org-element-cache-persistent); Defined in org-element.el
 (defvar org-element-use-cache); Defined in org-element.el
+(defvar org-mode-loading nil
+  "Non-nil during Org mode initialisation.")
 ;;;###autoload
 (define-derived-mode org-mode outline-mode "Org"
   "Outline-based notes management and organizer, alias
@@ -4839,6 +4842,7 @@ can be exported as a structured ASCII or HTML file.
 The following commands are available:
 
 \\{org-mode-map}"
+  (setq-local org-mode-loading t)
   (org-load-modules-maybe)
   (org-install-agenda-files-menu)
   (when org-link-descriptive (add-to-invisibility-spec '(org-link)))
@@ -4874,6 +4878,11 @@ The following commands are available:
   (add-hook 'before-change-functions 'org-before-change-function nil 'local)
   ;; Check for running clock before killing a buffer
   (add-hook 'kill-buffer-hook 'org-check-running-clock nil 'local)
+  ;; Initialize cache.
+  (org-element-cache-reset)
+  (when (and org-element-cache-persistent
+             org-element-use-cache)
+    (org-persist-load 'org-element--cache (current-buffer) t))
   ;; Initialize macros templates.
   (org-macro-initialize-templates)
   ;; Initialize radio targets.
@@ -4885,11 +4894,6 @@ The following commands are available:
   (org-setup-filling)
   ;; Comments.
   (org-setup-comments-handling)
-  ;; Initialize cache.
-  (org-element-cache-reset)
-  (when (and org-element-cache-persistent
-             org-element-use-cache)
-    (org-persist-read 'org-element--cache (current-buffer)))
   ;; Beginning/end of defun
   (setq-local beginning-of-defun-function 'org-backward-element)
   (setq-local end-of-defun-function
@@ -4978,7 +4982,8 @@ The following commands are available:
   ;; Set face extension as requested.
   (org--set-faces-extend '(org-block-begin-line org-block-end-line)
                          org-fontify-whole-block-delimiter-line)
-  (org--set-faces-extend org-level-faces org-fontify-whole-heading-line))
+  (org--set-faces-extend org-level-faces org-fontify-whole-heading-line)
+  (setq-local org-mode-loading nil))
 
 ;; Update `customize-package-emacs-version-alist'
 (add-to-list 'customize-package-emacs-version-alist
@@ -11647,6 +11652,7 @@ headlines matching this string."
 	             (goto-char (1- (org-element-property :end el))))))
                ;; Get the correct position from where to continue
 	       (when org-map-continue-from
+                 (setq org-element-cache-map-continue-from org-map-continue-from)
 	         (goto-char org-map-continue-from))
                ;; Return nil.
                nil)
@@ -12610,9 +12616,9 @@ Assume point is at the beginning of the headline."
   (let* ((cached (and (org-element--cache-active-p) (org-element-at-point nil 'cached)))
          (cached-tags (org-element-property :tags cached)))
     (if cached
-        ;; If we do not wrap result into `cl-copy-list', reference would
+        ;; If we do explicitly copy the result, reference would
         ;; be returned and cache element might be modified directly.
-        (cl-copy-list cached-tags)
+        (mapcar #'copy-sequence cached-tags)
       ;; Parse tags manually.
       (and (looking-at org-tag-line-re)
            (split-string (match-string-no-properties 2) ":" t)))))
@@ -12656,9 +12662,9 @@ Inherited tags have the `inherited' text property."
               (if cached
                   (while (setq cached (org-element-property :parent cached))
                     (setq itags (nconc (mapcar #'org-add-prop-inherited
-                                               ;; If we do not wrap result into `cl-copy-list', reference would
+                                               ;; If we do explicitly copy the result, reference would
                                                ;; be returned and cache element might be modified directly.
-                                               (cl-copy-list (org-element-property :tags cached)))
+                                               (mapcar #'copy-sequence (org-element-property :tags cached)))
                                        itags)))
                 (while (org-up-heading-safe)
                   (setq itags (nconc (mapcar #'org-add-prop-inherited
@@ -13601,9 +13607,8 @@ drawer is immediately hidden."
      (org-with-limited-levels (org-back-to-heading-or-point-min t)))
    (if (org-before-first-heading-p)
        (while (and (org-at-comment-p) (bolp)) (forward-line))
-     (progn
-       (forward-line)
-       (when (looking-at-p org-planning-line-re) (forward-line))))
+     (forward-line)
+     (when (looking-at-p org-planning-line-re) (forward-line)))
    (unless (looking-at-p org-property-drawer-re)
      ;; Make sure we start editing a line from current entry, not from
      ;; next one.  It prevents extending text properties or overlays
@@ -17473,10 +17478,10 @@ for more information."
    ((run-hook-with-args-until-success 'org-metaup-hook))
    ((org-region-active-p)
     (let* ((a (save-excursion
-		(goto-char (min (region-beginning) (region-end)))
+		(goto-char (region-beginning))
 		(line-beginning-position)))
 	   (b (save-excursion
-		(goto-char (max (region-beginning) (region-end)))
+		(goto-char (region-end))
 		(if (bolp) (1- (point)) (line-end-position))))
 	   (c (save-excursion
 		(goto-char a)
@@ -17506,10 +17511,10 @@ commands for more information."
    ((run-hook-with-args-until-success 'org-metadown-hook))
    ((org-region-active-p)
     (let* ((a (save-excursion
-		(goto-char (min (region-beginning) (region-end)))
+		(goto-char (region-beginning))
 		(line-beginning-position)))
 	   (b (save-excursion
-		(goto-char (max (region-beginning) (region-end)))
+		(goto-char (region-end))
 		(if (bolp) (1- (point)) (line-end-position))))
 	   (c (save-excursion
 		(goto-char b)
@@ -18956,17 +18961,19 @@ With prefix arg UNCOMPILED, load the uncompiled versions."
   "Is S an ID created by UUIDGEN?"
   (string-match "\\`[0-9a-f]\\{8\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{4\\}-[0-9a-f]\\{12\\}\\'" (downcase s)))
 
-(defun org-in-src-block-p (&optional inside)
+(defun org-in-src-block-p (&optional inside element)
   "Whether point is in a code source block.
 When INSIDE is non-nil, don't consider we are within a source
-block when point is at #+BEGIN_SRC or #+END_SRC."
-  (let ((case-fold-search t))
-    (or (and (eq (get-char-property (point) 'src-block) t))
-	(and (not inside)
-	     (save-match-data
-	       (save-excursion
-		 (beginning-of-line)
-		 (looking-at ".*#\\+\\(begin\\|end\\)_src")))))))
+block when point is at #+BEGIN_SRC or #+END_SRC.
+When ELEMENT is provided, it is considered to be element at point."
+  (save-match-data (setq element (or element (org-element-at-point))))
+  (when (eq 'src-block (org-element-type element))
+    (or (not inside)
+        (not (or (= (line-beginning-position)
+                  (org-element-property :post-affiliated element))
+               (= (1+ (line-end-position))
+                  (- (org-element-property :end element)
+                     (org-element-property :post-blank element))))))))
 
 (defun org-context ()
   "Return a list of contexts of the current cursor position.
@@ -20741,11 +20748,16 @@ instead of back to heading."
     (org-back-to-heading invisible-ok)))
 
 (defun org-before-first-heading-p ()
-  "Before first heading?"
-  (org-with-limited-levels
-   (save-excursion
-     (end-of-line)
-     (null (re-search-backward org-outline-regexp-bol nil t)))))
+  "Before first heading?
+Respect narrowing."
+  (if (org-element--cache-active-p)
+      (let ((cached-headline (org-element-lineage (org-element-at-point) '(headline) t)))
+        (or (not cached-headline)
+            (< (org-element-property :begin cached-headline) (point-min))))
+    (org-with-limited-levels
+     (save-excursion
+       (end-of-line)
+       (null (re-search-backward org-outline-regexp-bol nil t))))))
 
 (defun org-at-heading-p (&optional _)
   "Non-nil when on a headline."

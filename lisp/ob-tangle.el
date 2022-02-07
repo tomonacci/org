@@ -1,6 +1,6 @@
 ;;; ob-tangle.el --- Extract Source Code From Org Files -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; Keywords: literate programming, reproducible research
@@ -37,13 +37,16 @@
 (declare-function org-babel-update-block-body "ob-core" (new-body))
 (declare-function org-back-to-heading "org" (&optional invisible-ok))
 (declare-function org-before-first-heading-p "org" ())
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element--cache-active-p "org-element" ())
+(declare-function org-element-lineage "org-element" (datum &optional types with-self))
+(declare-function org-element-property "org-element" (property element))
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-heading-components "org" ())
 (declare-function org-in-commented-heading-p "org" (&optional no-inheritance))
 (declare-function org-in-archived-heading-p "org" (&optional no-inheritance))
 (declare-function outline-previous-heading "outline" ())
-(defvar org-id-link-to-org-use-id nil) ; Dynamically scoped
+(defvar org-id-link-to-org-use-id) ; Dynamically scoped
 
 (defcustom org-babel-tangle-lang-exts
   '(("emacs-lisp" . "el")
@@ -425,8 +428,10 @@ code blocks by target file."
   (let ((counter 0) last-heading-pos blocks)
     (org-babel-map-src-blocks (buffer-file-name)
       (let ((current-heading-pos
-	     (org-with-wide-buffer
-	      (org-with-limited-levels (outline-previous-heading)))))
+             (if (org-element--cache-active-p)
+                 (or (org-element-property :begin (org-element-lineage (org-element-at-point) '(headline) t)) 1)
+	       (org-with-wide-buffer
+	        (org-with-limited-levels (outline-previous-heading))))))
 	(if (eq last-heading-pos current-heading-pos) (cl-incf counter)
 	  (setq counter 1)
 	  (setq last-heading-pos current-heading-pos)))

@@ -1,6 +1,6 @@
 ;;; org-pcomplete.el --- In-buffer Completion Code -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;;         John Wiegley <johnw at gnu dot org>
@@ -35,7 +35,7 @@
 (declare-function org-babel-get-src-block-info "ob-core" (&optional light datum))
 (declare-function org-before-first-heading-p "org" ())
 (declare-function org-buffer-property-keys "org" (&optional specials defaults columns))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-property "org-element" property element)
 (declare-function org-element-type "org-element" (element))
 (declare-function org-end-of-meta-data "org" (&optional full))

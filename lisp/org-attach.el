@@ -1,6 +1,6 @@
 ;;; org-attach.el --- Manage file attachments to Org outlines -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2022 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@newartisans.com>
 ;; Keywords: org data attachment
@@ -314,14 +314,14 @@ Shows a list of commands and prompts for another key to execute a command."
 			     (concat (mapcar #'caar org-attach-commands)))))
 	    (message msg)
 	    (while (and (setq c (read-char-exclusive))
-		        (memq c '(14 16 22 134217846)))
+                        (memq c '(?\C-n ?\C-p ?\C-v ?\M-v)))
 	      (org-scroll c t)))
 	  (and (get-buffer "*Org Attach*") (kill-buffer "*Org Attach*"))))
       (let ((command (cl-some (lambda (entry)
 				(and (memq c (nth 0 entry)) (nth 1 entry)))
 			      org-attach-commands)))
-	(if (commandp command t)
-	    (call-interactively command)
+	(if (commandp command)
+	    (command-execute command)
 	  (error "No such attachment command: %c" c))))))
 
 (defun org-attach-dir (&optional create-if-not-exists-p no-fs-check)

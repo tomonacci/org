@@ -3759,7 +3759,24 @@ Text
   (should
    (org-test-with-temp-text "* H\n"
      (forward-line)
-     (or (org-element-at-point) t))))
+     (or (org-element-at-point) t)))
+  ;; Return greater element when ouside contents.
+  (should
+   (eq 'drawer
+       (org-test-with-temp-text
+        ":DRAWER:\ntest\n:EN<point>D:\n"
+        (org-element-type (org-element-at-point)))))
+  (should
+   (eq 'drawer
+       (org-test-with-temp-text
+        ":DRA<point>WER:\ntest\n:END:\n"
+        (org-element-type (org-element-at-point)))))
+  ;; Return greater element when at :contents-end.
+  (should
+   (eq 'drawer
+       (org-test-with-temp-text
+        ":DRAWER:\ntest\n<point>:END:\n"
+        (org-element-type (org-element-at-point))))))
 
 (ert-deftest test-org-element/context ()
   "Test `org-element-context' specifications."
@@ -3866,7 +3883,7 @@ Text
   ;; `org-element-at-point' or `org-element-context', the list is
   ;; limited to the current section.
   (should
-   (equal '(paragraph center-block section headline)
+   (equal '(paragraph center-block section headline headline org-data)
 	  (org-test-with-temp-text
 	      "* H1\n** H2\n#+BEGIN_CENTER\n*bold<point>*\n#+END_CENTER"
 	    (mapcar #'car (org-element-lineage (org-element-context))))))
@@ -3891,7 +3908,7 @@ Text
      (org-element-lineage (org-element-context) '(example-block))))
   ;; Test WITH-SELF optional argument.
   (should
-   (equal '(bold paragraph center-block section headline)
+   (equal '(bold paragraph center-block section headline headline org-data)
 	  (org-test-with-temp-text
 	      "* H1\n** H2\n#+BEGIN_CENTER\n*bold<point>*\n#+END_CENTER"
 	    (mapcar #'car (org-element-lineage (org-element-context) nil t)))))
@@ -4099,7 +4116,7 @@ Text
       (should-not (eq 'comment (org-element-type (org-element-at-point))))
       (should (eq (org-element-at-point) (org-element-at-point 1)))))
   (should (eq 'headline
-              (org-test-with-temp-text "* H1\nP1\n<point*H2\n"
+              (org-test-with-temp-text "* H1\nP1\n<point>* H2\n"
                 (let ((org-element-use-cache t))
                   (org-element-cache-map #'ignore :granularity 'element)
                   (insert "Blah\n")
@@ -4127,6 +4144,20 @@ Text
        (eq (org-element-property
 	    :end (org-element-property :parent (org-element-at-point)))
 	   (+ parent-end 3))))))
+
+(ert-deftest test-org-element/cache-affiliated ()
+  "Test updating affiliated keywords."
+  ;; Inserting a line right after other keywords.
+  (let ((org-element-use-cache t))
+    (org-test-with-temp-text "
+#+caption: test
+#+name: test
+<point>
+line"
+      (org-element-cache-map #'ignore :granularity 'element)
+      (should (eq 'keyword (org-element-type (org-element-at-point))))
+      (insert "#")
+      (should (eq 2 (org-element-property :begin (org-element-at-point)))))))
 
 (ert-deftest test-org-element/cache-table ()
   "Test handling edits in tables."

@@ -1,6 +1,6 @@
 ;;; org-table.el --- The Table Editor for Org        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -47,7 +47,7 @@
 (declare-function org-mode "org" ())
 (declare-function org-duration-p "org-duration" (duration &optional canonical))
 (declare-function org-duration-to-minutes "org-duration" (duration &optional canonical))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-contents "org-element" (element))
 (declare-function org-element-extract-element "org-element" (element))
 (declare-function org-element-interpret-data "org-element" (data))

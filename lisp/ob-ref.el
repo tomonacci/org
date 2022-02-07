@@ -1,6 +1,6 @@
 ;;; ob-ref.el --- Babel Functions for Referencing External Data -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2022 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	 Dan Davison
@@ -54,7 +54,7 @@
 (require 'cl-lib)
 
 (declare-function org-babel-lob-get-info "ob-lob" (&optional datum))
-(declare-function org-element-at-point "org-element" ())
+(declare-function org-element-at-point "org-element" (&optional pom cached-only))
 (declare-function org-element-property "org-element" (property element))
 (declare-function org-element-type "org-element" (element))
 (declare-function org-end-of-meta-data "org" (&optional full))

@@ -1,6 +1,6 @@
 ;;; org-agenda.el --- Dynamic task and appointment lists for Org  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2021 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2022 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten.dominik@gmail.com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -89,6 +89,8 @@
 (declare-function org-capture "org-capture" (&optional goto keys))
 (declare-function org-clock-modify-effort-estimate "org-clock" (&optional value))
 
+(declare-function org-element-type "org-element" (&optional element))
+
 (defvar calendar-mode-map)
 (defvar org-clock-current-task)
 (defvar org-current-tag-alist)
@@ -100,8 +102,8 @@
 
 ;; Defined somewhere in this file, but used before definition.
 (defvar org-agenda-buffer-name "*Org Agenda*")
-(defvar org-agenda-overriding-header nil)
 (defvar org-agenda-title-append nil)
+(defvar org-agenda-overriding-header)
 ;; (with-no-warnings (defvar entry)) ;; unprefixed, from calendar.el
 ;; (with-no-warnings (defvar date))  ;; unprefixed, from calendar.el
 (defvar original-date) ; dynamically scoped, calendar.el does scope this
@@ -1222,6 +1224,15 @@ For example, 9:30am would become 09:30 rather than  9:30."
   :version "24.1"
   :type 'boolean)
 
+(defcustom org-agenda-clock-report-header nil
+  "Header for org agenda clock report mode"
+  :group 'org-agenda
+  :type '(choice
+    (string :tag "Header")
+    (const :tag "No header" nil))
+  :safe #'stringp
+  :package-version '(Org . "9.6"))
+
 (defun org-agenda-time-of-day-to-ampm (time)
   "Convert TIME of a string like \"13:45\" to an AM/PM style time string."
   (let* ((hour-number (string-to-number (substring time 0 -3)))
@@ -2164,7 +2175,7 @@ string that it returns."
 (org-remap org-agenda-mode-map 'move-end-of-line 'org-agenda-end-of-line)
 
 (defvar org-agenda-menu) ; defined later in this file.
-(defvar org-agenda-restrict nil) ; defined later in this file.
+(defvar org-agenda-restrict nil)
 (defvar org-agenda-follow-mode nil)
 (defvar org-agenda-entry-text-mode nil)
 (defvar org-agenda-clockreport-mode nil)
@@ -4478,6 +4489,8 @@ items if they have an hour specification like [h]h:mm."
 	  (setq p (plist-put p :tend clocktable-end))
 	  (setq p (plist-put p :scope 'agenda))
 	  (setq tbl (apply #'org-clock-get-clocktable p))
+    (when org-agenda-clock-report-header
+      (insert (propertize org-agenda-clock-report-header 'face 'org-agenda-structure)))
 	  (insert tbl)))
       (goto-char (point-min))
       (or org-agenda-multi (org-agenda-fit-window-to-buffer))
@@ -5748,7 +5761,8 @@ displayed in agenda view."
 		    (org-at-planning-p)
 		    (org-before-first-heading-p)
 		    (and org-agenda-include-inactive-timestamps
-			 (org-at-clock-log-p)))
+			 (org-at-clock-log-p))
+                    (not (eq 'timestamp (org-element-type (org-element-context)))))
 	    (throw :skip nil))
 	  (org-agenda-skip))
 	(let* ((pos (match-beginning 0))
@@ -7738,7 +7752,7 @@ When TYPE is \"scheduled\", \"deadline\", \"timestamp\" or
 \"timestamp_ia\", compare within each of these type.  When TYPE
 is the empty string, compare all timestamps without respect of
 their type."
-  (let* ((def (and (not org-agenda-sort-notime-is-late) -1))
+  (let* ((def (if org-agenda-sort-notime-is-late 99999999 -1))
 	 (ta (or (and (string-match type (or (get-text-property 1 'type a) ""))
 		      (get-text-property 1 'ts-date a))
 		 def))
