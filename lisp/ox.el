@@ -633,7 +633,7 @@ This option can also be set with the SELECT_TAGS keyword."
 (defcustom org-export-with-smart-quotes nil
   "Non-nil means activate smart quotes during export.
 This option can also be set with the OPTIONS keyword,
-e.g., \"':t\".
+e.g., \"\\=':t\".
 
 When setting this to non-nil, you need to take care of
 using the correct Babel package when exporting to LaTeX.
@@ -4476,7 +4476,9 @@ Return value can be an object or an element:
                               :write-immediately t))))
 
 (defun org-export-link-localise (link)
-  "If LINK refers to a remote resource, modify it to point to a local downloaded copy."
+  "Convert remote LINK to local link.
+If LINK refers to a remote resource, modify it to point to a local
+downloaded copy.  Otherwise, return unchanged LINK."
   (when (org-export-link-remote-p link)
     (let* ((local-path (org-export-link--remote-local-copy link)))
       (setcdr link

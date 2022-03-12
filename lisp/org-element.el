@@ -435,31 +435,25 @@ still has an entry since one of its properties (`:title') does.")
   "Alist between element types and locations of secondary values.")
 
 (defconst org-element--pair-round-table
-  (let ((table (make-syntax-table)))
+  (let ((table (make-char-table 'syntax-table '(2))))
     (modify-syntax-entry ?\( "()" table)
     (modify-syntax-entry ?\) ")(" table)
-    (dolist (char '(?\{ ?\} ?\[ ?\] ?\< ?\>) table)
-      (modify-syntax-entry char " " table)))
-  "Table used internally to pair only round brackets.
-Other brackets are treated as spaces.")
+    table)
+  "Table used internally to pair only round brackets.")
 
 (defconst org-element--pair-square-table
-  (let ((table (make-syntax-table)))
+  (let ((table (make-char-table 'syntax-table '(2))))
     (modify-syntax-entry ?\[ "(]" table)
     (modify-syntax-entry ?\] ")[" table)
-    (dolist (char '(?\{ ?\} ?\( ?\) ?\< ?\>) table)
-      (modify-syntax-entry char " " table)))
-  "Table used internally to pair only square brackets.
-Other brackets are treated as spaces.")
+    table)
+  "Table used internally to pair only square brackets.")
 
 (defconst org-element--pair-curly-table
-  (let ((table (make-syntax-table)))
+  (let ((table (make-char-table 'syntax-table '(2))))
     (modify-syntax-entry ?\{ "(}" table)
     (modify-syntax-entry ?\} "){" table)
-    (dolist (char '(?\[ ?\] ?\( ?\) ?\< ?\>) table)
-      (modify-syntax-entry char " " table)))
-  "Table used internally to pair only curly brackets.
-Other brackets are treated as spaces.")
+    table)
+  "Table used internally to pair only curly brackets.")
 
 (defun org-element--parse-paired-brackets (char)
   "Parse paired brackets at point.
@@ -1276,9 +1270,16 @@ parser (e.g. `:end' and :END:).  Return value is a plist."
                               (min robust-end (point))))
                            (+ 2 contents-begin))))
           (category (cond ((null org-category)
-		           (when buffer-file-name
+		           (when (with-current-buffer
+                                     (or (buffer-base-buffer)
+                                         (current-buffer))
+                                   buffer-file-name)
 		             (file-name-sans-extension
-		              (file-name-nondirectory buffer-file-name))))
+		              (file-name-nondirectory
+                               (with-current-buffer
+                                   (or (buffer-base-buffer)
+                                       (current-buffer))
+                                 buffer-file-name)))))
 		          ((symbolp org-category) (symbol-name org-category))
 		          (t org-category)))
           (category (catch 'buffer-category

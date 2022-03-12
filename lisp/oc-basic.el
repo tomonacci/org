@@ -178,21 +178,29 @@ Return a hash table with citation references as keys and fields alist as values.
                                      " and ")))
                              ('issued
                               ;; Date are expressed as an array
-                              ;; (`date-parts') or a "string (`raw').
-                              ;; In both cases, extract the year and
-                              ;; associate it to `year' field, for
-                              ;; compatibility with BibTeX format.
+                              ;; (`date-parts') or a "string (`raw'
+                              ;; or `literal'). In both cases,
+                              ;; extract the year and associate it
+                              ;; to `year' field, for compatibility
+                              ;; with BibTeX format.
                               (let ((date (or (alist-get 'date-parts value)
+                                              (alist-get 'literal value)
                                               (alist-get 'raw value))))
                                 (cons 'year
                                       (cond
                                        ((consp date)
                                         (caar date))
                                        ((stringp date)
-                                        (car (split-string date "-")))
+                                        (replace-regexp-in-string
+                                          (rx
+                                            (minimal-match (zero-or-more anything))
+                                            (group-n 1 (repeat 4 digit))
+                                            (zero-or-more anything))
+                                          (rx (backref 1))
+                                          date))
                                        (t
                                         (error "Unknown CSL-JSON date format: %S"
-                                               date))))))
+                                               value))))))
                              (_
                               (cons field value))))
                          item)
@@ -340,6 +348,17 @@ This is used for disambiguation."
                         ((= n 27) (throw :complete (cons 0 (cons 0 result))))
                         (t nil))))))))
 
+(defun org-cite-basic--get-author (entry-or-key &optional info raw)
+  "Return author associated to ENTRY-OR-KEY.
+
+ENTRY-OR-KEY, INFO and RAW arguments are the same arguments as
+used in `org-cite-basic--get-field', which see.
+
+Author is obtained from the \"author\" field, if available, or
+from the \"editor\" field otherwise."
+  (or (org-cite-basic--get-field 'author entry-or-key info raw)
+      (org-cite-basic--get-field 'editor entry-or-key info raw)))
+
 (defun org-cite-basic--get-year (entry-or-key info &optional no-suffix)
   "Return year associated to ENTRY-OR-KEY.
 
@@ -363,7 +382,7 @@ necessary, unless optional argument NO-SUFFIX is non-nil."
   ;; KEY-SUFFIX-ALIST is an association (KEY . SUFFIX), where KEY is
   ;; the cite key, as a string, and SUFFIX is the generated suffix
   ;; string, or the empty string.
-  (let* ((author (org-cite-basic--get-field 'author entry-or-key info 'raw))
+  (let* ((author (org-cite-basic--get-author entry-or-key info 'raw))
          (year
           (or (org-cite-basic--get-field 'year entry-or-key info 'raw)
               (let ((date
@@ -399,7 +418,7 @@ necessary, unless optional argument NO-SUFFIX is non-nil."
   "Format ENTRY according to STYLE string.
 ENTRY is an alist, as returned by `org-cite-basic--get-entry'.
 Optional argument INFO is the export state, as a property list."
-  (let ((author (org-cite-basic--get-field 'author entry info))
+  (let ((author (org-cite-basic--get-author entry info))
         (title (org-cite-basic--get-field 'title entry info))
         (from
          (or (org-cite-basic--get-field 'publisher entry info)
@@ -527,7 +546,7 @@ INFO is the export state, as a property list."
                      (suffix (org-element-property :suffix ref)))
                  (funcall format-ref
                           prefix
-                          (org-cite-basic--get-field 'author k info)
+                          (org-cite-basic--get-author k info)
                           (org-cite-basic--get-year k info)
                           suffix)))
              (org-cite-get-references citation)
@@ -599,7 +618,7 @@ export communication channel, as a property list."
          (org-export-data
           (mapconcat
            (lambda (key)
-             (let ((author (org-cite-basic--get-field 'author key info)))
+             (let ((author (org-cite-basic--get-author key info)))
                (if caps (capitalize author) author)))
            (org-cite-get-references citation t)
            org-cite-basic-author-year-separator)
@@ -736,7 +755,7 @@ Return nil if there are no bibliography files or no entries."
       (dolist (key (org-cite-basic--all-keys))
         (let ((completion
                (concat
-                (let ((author (org-cite-basic--get-field 'author key nil t)))
+                (let ((author (org-cite-basic--get-author key nil 'raw)))
                   (if author
                       (truncate-string-to-width
                        (replace-regexp-in-string " and " "; " author)
