@@ -1108,7 +1108,7 @@ Assume point is at beginning of the headline."
 		   (org-split-string (match-string 1) ":")))
 	   (title-end (point))
 	   (raw-value (org-trim
-		       (buffer-substring-no-properties title-start title-end)))
+	               (buffer-substring-no-properties title-start title-end)))
 	   (archivedp (member org-element-archive-tag tags))
 	   (footnote-section-p (and org-footnote-section
 				    (string= org-footnote-section raw-value)))
@@ -1159,6 +1159,8 @@ Assume point is at beginning of the headline."
 			  :contents-end contents-end
                           :robust-begin robust-begin
                           :robust-end robust-end
+                          :title-begin title-start
+                          :title-end title-end
 			  :level level
 			  :priority priority
 			  :tags tags
