@@ -198,12 +198,14 @@ but which mess up the display of a snippet in Org exported files.")
     ("calc" . fundamental)
     ("cpp" . c++)
     ("ditaa" . artist)
+    ("desktop" . conf-desktop)
     ("dot" . fundamental)
     ("elisp" . emacs-lisp)
     ("ocaml" . tuareg)
     ("screen" . shell-script)
     ("shell" . sh)
-    ("sqlite" . sql))
+    ("sqlite" . sql)
+    ("toml" . conf-toml))
   "Alist mapping languages to their major mode.
 
 The key is the language name.  The value is the mode name, as
@@ -1356,8 +1358,10 @@ EVENT is passed to `mouse-set-point'."
       (goto-char beg)
       (cond
        ;; Block is hidden; move at start of block.
-       ((cl-some (lambda (o) (eq (overlay-get o 'invisible) 'org-hide-block))
-		 (overlays-at (point)))
+       ((if (eq org-fold-core-style 'text-properties)
+            (org-fold-folded-p nil 'block)
+          (cl-some (lambda (o) (eq (overlay-get o 'invisible) 'org-hide-block))
+		   (overlays-at (point))))
 	(beginning-of-line 0))
        (write-back (org-src--goto-coordinates coordinates beg end))))
     ;; Clean up left-over markers and restore window configuration.

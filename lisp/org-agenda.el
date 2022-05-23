@@ -47,6 +47,7 @@
 
 (require 'cl-lib)
 (require 'ol)
+(require 'org-fold-core)
 (require 'org)
 (require 'org-macs)
 (require 'org-refile)
@@ -2329,7 +2330,8 @@ The following commands are available:
 	  org-agenda-show-log org-agenda-start-with-log-mode
 	  org-agenda-clockreport-mode org-agenda-start-with-clockreport-mode))
   (add-to-invisibility-spec '(org-filtered))
-  (add-to-invisibility-spec '(org-link))
+  (org-fold-core-initialize `(,org-link--description-folding-spec
+                              ,org-link--link-folding-spec))
   (easy-menu-change
    '("Agenda") "Agenda Files"
    (append
@@ -3930,7 +3932,7 @@ FILTER-ALIST is an alist of filters we need to apply when
 	      (insert "\n"
 		      (if (stringp org-agenda-block-separator)
 			  org-agenda-block-separator
-			(make-string (window-width) org-agenda-block-separator))
+			(make-string (window-max-chars-per-line) org-agenda-block-separator))
 		      "\n"))
 	    (narrow-to-region (point) (point-max)))
 	(setq org-done-keywords-for-agenda nil)
@@ -4880,7 +4882,7 @@ Press `\\[org-agenda-manipulate-query-add]', \
 
 ;;;###autoload
 (defun org-todo-list (&optional arg)
-  "Show all (not done) TODO entries from all agenda file in a single list.
+  "Show all (not done) TODO entries from all agenda files in a single list.
 The prefix arg can be used to select a specific TODO keyword and limit
 the list to these.  When using `\\[universal-argument]', you will be prompted
 for a keyword.  A numeric prefix directly selects the Nth keyword in
@@ -4949,7 +4951,7 @@ to search again: (0)[ALL]"))
 	    (let ((n 0))
               (dolist (k kwds)
                 (let ((s (format "(%d)%s" (cl-incf n) k)))
-                  (when (> (+ (current-column) (string-width s) 1) (window-width))
+                  (when (> (+ (current-column) (string-width s) 1) (window-max-chars-per-line))
                     (insert "\n                     "))
                   (insert " " s))))
 	    (insert "\n"))
@@ -5762,7 +5764,7 @@ displayed in agenda view."
 		    (org-before-first-heading-p)
 		    (and org-agenda-include-inactive-timestamps
 			 (org-at-clock-log-p))
-                    (not (eq 'timestamp (org-element-type (org-element-context)))))
+                    (not (org-at-timestamp-p 'agenda)))
 	    (throw :skip nil))
 	  (org-agenda-skip))
 	(let* ((pos (match-beginning 0))
@@ -7383,6 +7385,7 @@ TODAYP is t when the current agenda view is on today."
 
 (defun org-compile-prefix-format (key)
   "Compile the prefix format into a Lisp form that can be evaluated.
+KEY is the agenda type (see `org-agenda-prefix-format').
 The resulting form and associated variable bindings is returned
 and stored in the variable `org-prefix-format-compiled'."
   (setq org-prefix-has-time nil
@@ -7644,12 +7647,13 @@ The optional argument TYPE tells the agenda type."
 		  (concat
 		   (substring x 0 (match-end 1))
                    (unless (string= org-agenda-todo-keyword-format "")
-		     (format org-agenda-todo-keyword-format
-			     (match-string 2 x)))
-                   ;; Remove `display' property as the icon could leak
-		   ;; on the white space.
-		   (org-add-props " " (org-plist-delete (text-properties-at 0 x)
-                                                        'display))
+                     (format org-agenda-todo-keyword-format
+                             (match-string 2 x)))
+                   (unless (string= org-agenda-todo-keyword-format "")
+                     ;; Remove `display' property as the icon could leak
+                     ;; on the white space.
+                     (org-add-props " " (org-plist-delete (text-properties-at 0 x)
+                                                          'display)))
                    (substring x (match-end 3)))))))
       x)))
 
@@ -9401,7 +9405,7 @@ When called with a prefix argument, include all archive files as well."
     (push-mark)
     (goto-char pos)
     (when (derived-mode-p 'org-mode)
-      (org-show-context 'agenda)
+      (org-fold-show-context 'agenda)
       (recenter (/ (window-height) 2))
       (org-back-to-heading t)
       (let ((case-fold-search nil))
@@ -9690,7 +9694,7 @@ displayed Org file fills the frame."
       (widen)
       (goto-char pos)
       (when (derived-mode-p 'org-mode)
-	(org-show-context 'agenda)
+	(org-fold-show-context 'agenda)
 	(run-hooks 'org-agenda-after-show-hook)))))
 
 (defun org-agenda-goto-mouse (ev)
@@ -9706,7 +9710,7 @@ if it was hidden in the outline."
   (interactive "P")
   (let ((win (selected-window)))
     (org-agenda-goto t)
-    (when full-entry (org-show-entry))
+    (when full-entry (org-fold-show-entry))
     (select-window win)))
 
 (defvar org-agenda-show-window nil)
@@ -9725,12 +9729,12 @@ fold drawers."
 	  (select-window org-agenda-show-window)
 	  (ignore-errors (scroll-up)))
       (org-agenda-goto t)
-      (org-show-entry)
+      (org-fold-show-entry)
       (if arg (org-cycle-hide-drawers 'children)
 	(org-with-wide-buffer
 	 (narrow-to-region (org-entry-beginning-position)
 			   (org-entry-end-position))
-	 (org-show-all '(drawers))))
+	 (org-fold-show-all '(drawers))))
       (setq org-agenda-show-window (selected-window)))
     (select-window win)))
 
@@ -9761,7 +9765,7 @@ if it was hidden in the outline."
     (set-window-start (selected-window) (point-at-bol))
     (cond
      ((= more 0)
-      (org-flag-subtree t)
+      (org-fold-subtree t)
       (save-excursion
 	(org-back-to-heading)
 	(run-hook-with-args 'org-cycle-hook 'folded))
@@ -9769,20 +9773,20 @@ if it was hidden in the outline."
      ((and (called-interactively-p 'any) (= more 1))
       (message "Remote: show with default settings"))
      ((= more 2)
-      (outline-show-entry)
-      (org-show-children)
+      (org-fold-show-entry)
+      (org-fold-show-children)
       (save-excursion
 	(org-back-to-heading)
 	(run-hook-with-args 'org-cycle-hook 'children))
       (message "Remote: CHILDREN"))
      ((= more 3)
-      (outline-show-subtree)
+      (org-fold-show-subtree)
       (save-excursion
 	(org-back-to-heading)
 	(run-hook-with-args 'org-cycle-hook 'subtree))
       (message "Remote: SUBTREE"))
      ((> more 3)
-      (outline-show-subtree)
+      (org-fold-show-subtree)
       (message "Remote: SUBTREE AND ALL DRAWERS")))
     (select-window win)))
 
@@ -9914,7 +9918,7 @@ the same tree node, and the headline of the tree node in the Org file."
        (with-current-buffer buffer
 	 (widen)
 	 (goto-char pos)
-	 (org-show-context 'agenda)
+	 (org-fold-show-context 'agenda)
 	 (let ((current-prefix-arg arg))
 	   (call-interactively 'org-todo)
            ;; Make sure that log is recorded in current undo.
@@ -9955,7 +9959,7 @@ the same tree node, and the headline of the tree node in the Org file."
     (with-current-buffer buffer
       (widen)
       (goto-char pos)
-      (org-show-context 'agenda)
+      (org-fold-show-context 'agenda)
       (org-add-note))))
 
 (defun org-agenda-change-all-lines (newhead hdmarker
@@ -10040,8 +10044,8 @@ When optional argument LINE is non-nil, align tags only on the
 current line."
   (let ((inhibit-read-only t)
 	(org-agenda-tags-column (if (eq 'auto org-agenda-tags-column)
-				    (- (window-text-width))
-				  org-agenda-tags-column))
+			  (- (window-max-chars-per-line))
+			org-agenda-tags-column))
 	(end (and line (line-end-position)))
 	l c)
     (save-excursion
@@ -10104,7 +10108,7 @@ When called programmatically, FORCE-DIRECTION can be `set', `up',
       (with-current-buffer buffer
 	(widen)
 	(goto-char pos)
-	(org-show-context 'agenda)
+	(org-fold-show-context 'agenda)
 	(org-priority force-direction)
 	(end-of-line 1)
 	(setq newhead (org-get-heading)))
@@ -10128,7 +10132,7 @@ When called programmatically, FORCE-DIRECTION can be `set', `up',
 	(with-current-buffer buffer
 	  (widen)
 	  (goto-char pos)
-	  (org-show-context 'agenda)
+	  (org-fold-show-context 'agenda)
 	  (if tag
 	      (org-toggle-tag tag onoff)
 	    (call-interactively #'org-set-tags-command))
@@ -10153,7 +10157,7 @@ When called programmatically, FORCE-DIRECTION can be `set', `up',
        (with-current-buffer buffer
 	 (widen)
 	 (goto-char pos)
-	 (org-show-context 'agenda)
+	 (org-fold-show-context 'agenda)
 	 (call-interactively 'org-set-property))))))
 
 (defun org-agenda-set-effort ()
@@ -10172,7 +10176,7 @@ When called programmatically, FORCE-DIRECTION can be `set', `up',
        (with-current-buffer buffer
 	 (widen)
 	 (goto-char pos)
-	 (org-show-context 'agenda)
+	 (org-fold-show-context 'agenda)
 	 (call-interactively 'org-set-effort)
 	 (end-of-line 1)
 	 (setq newhead (org-get-heading)))
@@ -10194,7 +10198,7 @@ When called programmatically, FORCE-DIRECTION can be `set', `up',
        (with-current-buffer buffer
 	 (widen)
 	 (goto-char pos)
-	 (org-show-context 'agenda)
+	 (org-fold-show-context 'agenda)
 	 (call-interactively 'org-toggle-archive-tag)
 	 (end-of-line 1)
 	 (setq newhead (org-get-heading)))
@@ -10309,10 +10313,7 @@ When called programmatically, FORCE-DIRECTION can be `set', `up',
 				  (line-end-position)
 				  '(display nil))
 	  (org-move-to-column
-           (- (if (fboundp 'window-font-width)
-                  (/ (window-width nil t) (window-font-width))
-                ;; Fall back to pre-9.3.3 behavior on Emacs <25.
-                (window-width))
+           (- (window-max-chars-per-line)
               (length stamp))
            t)
           (add-text-properties
@@ -10404,7 +10405,7 @@ ARG is passed through to `org-deadline'."
         (with-current-buffer (marker-buffer marker)
 	  (widen)
 	  (goto-char pos)
-	  (org-show-context 'agenda)
+	  (org-fold-show-context 'agenda)
 	  (org-clock-in arg)
 	  (setq newhead (org-get-heading)))
 	(org-agenda-change-all-lines newhead hdmarker))
@@ -10493,7 +10494,7 @@ buffer, display it in another window."
        (find-file-noselect org-agenda-diary-file))
       (require 'org-datetree)
       (org-datetree-find-date-create d1)
-      (org-reveal t))
+      (org-fold-reveal t))
      (t (user-error "Invalid selection character `%c'" char)))))
 
 (defcustom org-agenda-insert-diary-strategy 'date-tree
@@ -10535,7 +10536,7 @@ the resulting entry will not be shown.  When TEXT is empty, switch to
       (anniversary
        (or (re-search-forward "^\\*[ \t]+Anniversaries" nil t)
 	   (progn
-	     (or (org-at-heading-p t)
+	     (or (org-at-heading-p)
 		 (progn
 		   (outline-next-heading)
 		   (insert "* Anniversaries\n\n")
@@ -10595,7 +10596,7 @@ the resulting entry will not be shown.  When TEXT is empty, switch to
 	  (message "%s entry added to %s"
 		   (capitalize (symbol-name type))
 		   (abbreviate-file-name org-agenda-diary-file)))
-      (org-reveal t)
+      (org-fold-reveal t)
       (message "Please finish entry here"))))
 
 (defun org-agenda-insert-diary-as-top-level (text)
@@ -10633,7 +10634,7 @@ a timestamp can be added there."
     (unless (bolp) (insert "\n"))
     (unless (looking-at-p "^[ \t]*$") (save-excursion (insert "\n")))
     (when org-adapt-indentation (indent-to-column col)))
-  (org-show-set-visibility 'lineage))
+  (org-fold-show-set-visibility 'lineage))
 
 (defun org-agenda-diary-entry ()
   "Make a diary entry, like the `i' command from the calendar.
